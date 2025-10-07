@@ -1,17 +1,16 @@
 #!/bin/bash
 
+# --- Variáveis de Configuração ---
 RANDOM_SUFFIX=$RANDOM
-RESOURCE_GROUP="rg-displaycsv-$RANDOM_SUFFIX"
+RESOURCE_GROUP="rg-displaycsv-azure-foods"
 LOCATION="canadacentral"
-APP_SERVICE_PLAN="asp-displaycsv-$RANDOM_SUFFIX"
-WEBAPP_NAME="webapp-displaycsv-$RANDOM_SUFFIX"
-SQL_SERVER_NAME="sql-server-displaycsv-$RANDOM_SUFFIX"
+APP_SERVICE_PLAN="asp-displaycsv-azure-foods"
+WEBAPP_NAME="webapp-displaycsv-azure-foods"
+SQL_SERVER_NAME="sql-server-displaycsv-azure-foods"
 SQL_DATABASE_NAME="sqldb-azure-foods"
 SQL_ADMIN_USER="azureadmin"
 SQL_ADMIN_PASSWORD="Password@123456"
-APP_INSIGHTS_NAME="appi-displaycsv-$RANDOM_SUFFIX"
-ACTION_GROUP_NAME="ag-webalerts-$RANDOM_SUFFIX"
-ALERT_EMAIL="wesley.jane.santos@gmail.com"
+APP_INSIGHTS_NAME="appi-displaycsv-azure-foods"
 GITHUB_REPO_URL="https://github.com/RafaellSouzaPinto/displaycsv.git"
 
 # --- Passo 1: Criação do Grupo de Recursos ---
@@ -36,43 +35,18 @@ az sql server firewall-rule create --resource-group $RESOURCE_GROUP --server $SQ
 echo "Criando Banco de Dados SQL: $SQL_DATABASE_NAME..."
 az sql db create --name $SQL_DATABASE_NAME --resource-group $RESOURCE_GROUP --server $SQL_SERVER_NAME --service-objective S0
 
-# --- Passo 5: Criação do Application Insights ---
+# --- Passo 5: Criação e Conexão do Application Insights ---
 echo "Criando Application Insights: $APP_INSIGHTS_NAME..."
 az monitor app-insights component create --app $APP_INSIGHTS_NAME --location $LOCATION --resource-group $RESOURCE_GROUP
 
 echo "Conectando Application Insights ao WebApp..."
-az monitor app-insights component connect --app $APP_INSIGHTS_NAME --resource-group $RESOURCE_GROUP --web-app $WEBAPP_NAME
+# Pega a Connection String do Application Insights que acabamos de criar.
+APPINSIGHTS_CONNECTION_STRING=$(az monitor app-insights component show --app $APP_INSIGHTS_NAME --resource-group $RESOURCE_GROUP --query connectionString --output tsv)
 
-# --- Passo 6: Criação do Grupo de Ações e Alerta para Erros 404 ---
+# Define a Connection String nas configurações do WebApp para ativar o monitoramento.
+az webapp config appsettings set --name $WEBAPP_NAME --resource-group $RESOURCE_GROUP --settings APPLICATIONINSIGHTS_CONNECTION_STRING=$APPINSIGHTS_CONNECTION_STRING
 
-# 6.1: Criar o Grupo de Ações para notificar por e-mail.
-echo "Criando Grupo de Ações: $ACTION_GROUP_NAME para notificar $ALERT_EMAIL..."
-az monitor action-group create \
-    --name $ACTION_GROUP_NAME \
-    --resource-group $RESOURCE_GROUP \
-    --action email my-email-receiver $ALERT_EMAIL
-
-# Pega o ID do Grupo de Ações que acabamos de criar.
-ACTION_GROUP_ID=$(az monitor action-group show --name $ACTION_GROUP_NAME --resource-group $RESOURCE_GROUP --query id --output tsv)
-
-# 6.2: Criar a regra de alerta e associá-la ao Grupo de Ações.
-echo "Configurando regra de alerta para HTTP 404..."
-WEBAPP_ID=$(az webapp show --name $WEBAPP_NAME --resource-group $RESOURCE_GROUP --query id --output tsv)
-
-az monitor metrics alert create \
-    --name "Alerta de Erros 404 para $WEBAPP_NAME" \
-    --resource-group $RESOURCE_GROUP \
-    --scopes $WEBAPP_ID \
-    --condition "count 'Http404' >= 1" \
-    --description "Alerta disparado quando um erro HTTP 404 é detectado." \
-    --evaluation-frequency 1m \
-    --window-size 5m \
-    --severity 2 \
-    --actions $ACTION_GROUP_ID
-
-echo "Regra de alerta e grupo de ações configurados. Verifique seu e-mail para confirmar a inscrição no alerta."
-
-# --- Passo 7: Configuração do Deploy a partir do GitHub ---
+# --- Passo 6: Configuração do Deploy a partir do GitHub ---
 echo "Configurando o deploy contínuo a partir do GitHub..."
 az webapp deployment source config --name $WEBAPP_NAME --resource-group $RESOURCE_GROUP --repo-url $GITHUB_REPO_URL --branch main --manual-integration
 
