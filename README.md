@@ -177,7 +177,5 @@ Ao final, o script exibe informações úteis, como a URL pública do Web App e 
 4. A página será recarregada, exibindo o conteúdo do arquivo em uma tabela
 5. Para visualizar outro arquivo, clique no link "Enviar outro arquivo"
 
----
 
-**Desenvolvido por**: [RafaellSouzaPinto](https://github.com/RafaellSouzaPinto)
 
